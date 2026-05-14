@@ -95,6 +95,14 @@ function App() {
           onLoginSuccess={(userData) => {
             setUser(userData)
             setShowLogin(false)
+            Swal.fire({
+              title: 'Login Successful!',
+              icon: 'success',
+              toast: true,
+              position: 'top-end',
+              timer: 800,
+              showConfirmButton: false
+            });
           }} 
         />
       )}
@@ -1834,10 +1842,15 @@ function CafeAdminDashboard({ user, onLogout, onUpdateUser }) {
   }
 
   useEffect(() => {
-    loadCafeDetails()
-    loadTables()
-    loadActiveBookings()
-    loadMenu()
+    // Parallelize initial load for maximum speed
+    const initLoad = async () => {
+      loadCafeDetails()
+      loadTables()
+      loadActiveBookings()
+      loadMenu()
+    }
+    initLoad()
+
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     // Periodically refresh cafe details (wallet, commission) every 10 seconds for multi-device sync
     const detailTimer = setInterval(loadCafeDetails, 10000)
@@ -1890,12 +1903,19 @@ function CafeAdminDashboard({ user, onLogout, onUpdateUser }) {
       const res = await api.getActiveBookings(user.id)
       const bookings = res.data || []
       setActiveBookings(bookings)
-      const itemsMap = {}
-      await Promise.all(bookings.map(async (b) => {
-        const itemRes = await api.getBookingItems(b.id)
-        itemsMap[b.id] = itemRes.data || []
-      }))
-      setBookingItems(itemsMap)
+      
+      // Update item counts incrementally in background so tables appear instantly
+      bookings.forEach(async (b) => {
+        try {
+          const itemRes = await api.getBookingItems(b.id)
+          setBookingItems(prev => ({
+            ...prev,
+            [b.id]: itemRes.data || []
+          }))
+        } catch (e) {
+          console.error(`Error loading items for booking ${b.id}:`, e)
+        }
+      })
     } catch (err) {
       console.error('Failed to load active bookings:', err)
     }
@@ -4358,9 +4378,28 @@ function ViewMenuModal({ categories, items, onClose, onRefresh }) {
 function OrderItemModal({ booking, menu, items, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
   const [activeCategory, setActiveCategory] = useState('All')
+  const [optimisticItems, setOptimisticItems] = useState(items)
+
+  // Sync with props when they change (e.g. after a successful background refresh)
+  useEffect(() => {
+    setOptimisticItems(items)
+  }, [items])
 
   const handleAddItem = async (item) => {
-    setLoading(true)
+    // 1. Optimistic Update
+    const tempId = `temp-${Date.now()}`
+    const newItem = {
+      id: tempId,
+      booking_id: booking.id,
+      item_id: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: 1,
+      isOptimistic: true
+    }
+    setOptimisticItems(prev => [...prev, newItem])
+
+    // 2. API Call (non-blocking for UI)
     try {
       await api.addBookingItem({
         booking_id: booking.id,
@@ -4369,37 +4408,48 @@ function OrderItemModal({ booking, menu, items, onClose, onSuccess }) {
         price: item.price,
         quantity: 1
       })
-      onSuccess() // Refresh counters
+      onSuccess() // Parent will refresh and then sync back to us
     } catch (err) {
+      // 3. Rollback on error
+      setOptimisticItems(prev => prev.filter(i => i.id !== tempId))
       Swal.fire({
         title: 'Error!',
         text: 'Failed to add item: ' + err.message,
         icon: 'error',
         confirmButtonColor: '#6366f1'
       });
-    } finally {
-      setLoading(false)
     }
   }
 
   const handleRemoveItem = async (menuItemId) => {
-    // Find the last added instance of this item in the booking
-    const itemToRemove = [...items].reverse().find(i => String(i.item_id) === String(menuItemId))
+    // Find the last added instance of this item in our optimistic list
+    const itemToRemove = [...optimisticItems].reverse().find(i => String(i.item_id) === String(menuItemId))
     if (!itemToRemove) return
     
-    setLoading(true)
+    // 1. Optimistic Update
+    setOptimisticItems(prev => {
+      const idx = prev.findLastIndex(i => String(i.item_id) === String(menuItemId))
+      if (idx === -1) return prev
+      const newList = [...prev]
+      newList.splice(idx, 1)
+      return newList
+    })
+
+    // 2. API Call (if it's not a temp item)
     try {
-      await api.deleteBookingItem(itemToRemove.id)
+      if (!String(itemToRemove.id).startsWith('temp-')) {
+        await api.deleteBookingItem(itemToRemove.id)
+      }
       onSuccess()
     } catch (err) {
+      // 3. Rollback on error
+      setOptimisticItems(prev => [...prev, itemToRemove])
       Swal.fire({
         title: 'Error!',
         text: 'Failed to remove item: ' + err.message,
         icon: 'error',
         confirmButtonColor: '#6366f1'
       });
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -4441,7 +4491,7 @@ function OrderItemModal({ booking, menu, items, onClose, onSuccess }) {
                 </div>
                 <div className="menu-items-grid">
                   {menu.filter(m => m.cafe_menu_categories?.name === catName).map(item => {
-                    const count = items.filter(i => String(i.item_id) === String(item.id)).reduce((acc, i) => acc + (i.quantity || 1), 0)
+                    const count = optimisticItems.filter(i => String(i.item_id) === String(item.id)).reduce((acc, i) => acc + (i.quantity || 1), 0)
                     const hasItems = count > 0
 
                     return (
@@ -4458,9 +4508,9 @@ function OrderItemModal({ booking, menu, items, onClose, onSuccess }) {
                         
                         {hasItems ? (
                           <div className="modern-qty-pill" onClick={e => e.stopPropagation()}>
-                            <button type="button" className="qty-minus" onClick={() => handleRemoveItem(item.id)} disabled={loading}>-</button>
+                            <button type="button" className="qty-minus" onClick={() => handleRemoveItem(item.id)}>-</button>
                             <div className="qty-circle">{count}</div>
-                            <button type="button" className="qty-plus" onClick={() => handleAddItem(item)} disabled={loading}>+</button>
+                            <button type="button" className="qty-plus" onClick={() => handleAddItem(item)}>+</button>
                           </div>
                         ) : (
                           <div className="plus-indicator-modern">+</div>
@@ -4484,9 +4534,14 @@ function OrderItemModal({ booking, menu, items, onClose, onSuccess }) {
 
 function OrderReviewModal({ booking, items, onClose, onRefresh }) {
   const [loading, setLoading] = useState(false)
+  const [optimisticItems, setOptimisticItems] = useState(items)
+
+  useEffect(() => {
+    setOptimisticItems(items)
+  }, [items])
 
   // Group items by item_id to show combined quantities
-  const groupedItems = Object.values(items.reduce((acc, item) => {
+  const groupedItems = Object.values(optimisticItems.reduce((acc, item) => {
     const key = item.item_id || 'unknown';
     if (!acc[key]) {
       acc[key] = { ...item, count: 0, ids: [] };
@@ -4497,7 +4552,19 @@ function OrderReviewModal({ booking, items, onClose, onRefresh }) {
   }, {}));
 
   const handleAdd = async (item) => {
-    setLoading(true)
+    // 1. Optimistic Update
+    const tempId = `temp-${Date.now()}`
+    const newItem = {
+      id: tempId,
+      booking_id: booking.id,
+      item_id: item.item_id,
+      name: item.name,
+      price: item.price,
+      quantity: 1
+    }
+    setOptimisticItems(prev => [...prev, newItem])
+
+    // 2. API Call
     try {
       await api.addBookingItem({
         booking_id: booking.id,
@@ -4508,33 +4575,45 @@ function OrderReviewModal({ booking, items, onClose, onRefresh }) {
       })
       onRefresh()
     } catch (err) {
+      // 3. Rollback
+      setOptimisticItems(prev => prev.filter(i => i.id !== tempId))
       Swal.fire({
         title: 'Error!',
         text: err.message,
         icon: 'error',
         confirmButtonColor: '#6366f1'
       });
-    } finally {
-      setLoading(false)
     }
   }
 
-  const handleRemove = async (ids) => {
+  const handleRemove = async (ids, itemId) => {
     if (ids.length === 0) return
     const idToDelete = ids[ids.length - 1]
-    setLoading(true)
+    
+    // 1. Optimistic Update
+    setOptimisticItems(prev => {
+      const idx = prev.findLastIndex(i => String(i.item_id) === String(itemId))
+      if (idx === -1) return prev
+      const newList = [...prev]
+      const removed = newList.splice(idx, 1)[0]
+      return newList
+    })
+
+    // 2. API Call
     try {
-      await api.deleteBookingItem(idToDelete)
+      if (!String(idToDelete).startsWith('temp-')) {
+        await api.deleteBookingItem(idToDelete)
+      }
       onRefresh()
     } catch (err) {
+      // 3. Rollback
+      onRefresh() // Easiest way to rollback complex state here
       Swal.fire({
         title: 'Error!',
         text: err.message,
         icon: 'error',
         confirmButtonColor: '#6366f1'
       });
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -4558,9 +4637,9 @@ function OrderReviewModal({ booking, items, onClose, onRefresh }) {
                   </div>
                   
                   <div className="modern-qty-pill">
-                    <button type="button" className="qty-minus" onClick={() => handleRemove(item.ids)} disabled={loading}>-</button>
+                    <button type="button" className="qty-minus" onClick={() => handleRemove(item.ids, item.item_id)}>-</button>
                     <div className="qty-circle">{item.count}</div>
-                    <button type="button" className="qty-plus" onClick={() => handleAdd(item)} disabled={loading}>+</button>
+                    <button type="button" className="qty-plus" onClick={() => handleAdd(item)}>+</button>
                   </div>
                 </div>
               ))}

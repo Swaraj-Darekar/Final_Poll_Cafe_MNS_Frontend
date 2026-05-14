@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from './api'
+import Swal from 'sweetalert2'
 
 const walletSyncChannel = new BroadcastChannel('wallet_sync');
 
@@ -222,12 +223,33 @@ function SuperAdminPanel({ onLogout, onAddCafe, refreshTrigger }) {
   }
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this cafe? All associated data (bookings, tables, sales, expenses) will be permanently removed.')) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: 'Are you sure you want to delete this cafe? All associated data (bookings, tables, sales, expenses) will be permanently removed.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
       try {
         await api.deleteCafe(id)
         loadData()
+        Swal.fire({
+          title: 'Deleted!',
+          text: 'Cafe has been deleted.',
+          icon: 'success',
+          confirmButtonColor: '#6366f1'
+        });
       } catch (err) {
-        alert('Error: ' + err.message)
+        Swal.fire({
+          title: 'Error!',
+          text: err.message,
+          icon: 'error',
+          confirmButtonColor: '#6366f1'
+        });
       }
     }
   }
@@ -481,14 +503,34 @@ function AnalyticsView() {
   }
 
   const handleManualSettle = async () => {
-    if (!window.confirm('Settle the current period now? This will create a snapshot of earnings and expenses.')) return
+    const result = await Swal.fire({
+      title: 'Settle Period?',
+      text: 'Settle the current period now? This will create a snapshot of earnings and expenses.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#6366f1',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, settle now'
+    });
+
+    if (!result.isConfirmed) return
     setSettling(true)
     try {
       await api.manualPlatformSettle()
-      alert('Platform settled successfully!')
+      Swal.fire({
+        title: 'Settled!',
+        text: 'Platform settled successfully!',
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      });
       loadAnalytics()
     } catch (err) {
-      alert('Settlement failed: ' + err.message)
+      Swal.fire({
+        title: 'Failed!',
+        text: 'Settlement failed: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setSettling(false)
     }
@@ -501,7 +543,12 @@ function AnalyticsView() {
       const res = await api.getPlatformSettlementExpenses(settlement.id)
       setPastExpenses({ settlement: res.settlement || settlement, expenses: res.data || [] })
     } catch (err) {
-      alert('Failed to load past expenses: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to load past expenses: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
       setPastExpenses(null)
     } finally {
       setLoadingPastExp(false)
@@ -764,7 +811,12 @@ function AddCafeModal({ onClose }) {
       });
       onClose();
     } catch (err) {
-      alert('Error registering cafe: ' + err.message);
+      Swal.fire({
+        title: 'Error!',
+        text: 'Error registering cafe: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false);
     }
@@ -891,7 +943,12 @@ function ExpensesView({ cafes, onRefreshData }) {
   const handleAdd = async (e) => {
     e.preventDefault()
     if (!form.cafe_id || form.cafe_id === 'Choose a cafe...') {
-      alert('Please select a cafe first.')
+      Swal.fire({
+        title: 'Selection Required',
+        text: 'Please select a cafe first.',
+        icon: 'warning',
+        confirmButtonColor: '#6366f1'
+      });
       return
     }
     
@@ -899,7 +956,12 @@ function ExpensesView({ cafes, onRefreshData }) {
       setSubmitting(true)
       const amt = parseFloat(form.amount)
       if (isNaN(amt)) {
-        alert('Please enter a valid numeric amount.')
+        Swal.fire({
+          title: 'Invalid Amount',
+          text: 'Please enter a valid numeric amount.',
+          icon: 'error',
+          confirmButtonColor: '#6366f1'
+        });
         setSubmitting(false)
         return
       }
@@ -914,22 +976,53 @@ function ExpensesView({ cafes, onRefreshData }) {
       })
       await loadAllExpenses()
       if (onRefreshData) onRefreshData() // Update global stats
-      alert('Expense recorded successfully!')
+      Swal.fire({
+        title: 'Success!',
+        text: 'Expense recorded successfully!',
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      });
     } catch (err) {
-      alert('Error adding expense: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Error adding expense: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this expense?')) return
+    const result = await Swal.fire({
+      title: 'Delete Expense?',
+      text: 'Are you sure you want to delete this expense?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (!result.isConfirmed) return
     try {
       await api.deleteExpense(id)
       loadAllExpenses()
       if (onRefreshData) onRefreshData()
+      Swal.fire({
+        title: 'Deleted!',
+        text: 'Expense has been removed.',
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      });
     } catch (err) {
-      alert('Error deleting expense: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Error deleting expense: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     }
   }
 
@@ -1125,16 +1218,36 @@ function CafeDetailsView({ cafe, onBack, onRefresh }) {
   }
 
   const handleReset = async () => {
-    if (!window.confirm('WARNING: This will permanently delete ALL bookings, sales, expenses, and wallet history for this cafe. Table and Menu configurations will be preserved. Are you sure?')) return
+    const result = await Swal.fire({
+      title: 'Reset System?',
+      text: 'WARNING: This will permanently delete ALL bookings, sales, expenses, and wallet history for this cafe. Table and Menu configurations will be preserved. Are you sure?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, reset everything!'
+    });
+
+    if (!result.isConfirmed) return
     
     try {
       setLoading(true)
       await api.resetCafe(cafe.id)
-      alert('System reset successfully! All historical data cleared.')
+      Swal.fire({
+        title: 'Reset Complete!',
+        text: 'System reset successfully! All historical data cleared.',
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      });
       if (onRefresh) onRefresh()
       fetchCafeData()
     } catch (err) {
-      alert('Reset failed: ' + err.message)
+      Swal.fire({
+        title: 'Reset Failed',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -1157,11 +1270,21 @@ function CafeDetailsView({ cafe, onBack, onRefresh }) {
       }
 
       await api.updateCafeSettings(cafe.id, updateData)
-      alert('Settings updated successfully!')
+      Swal.fire({
+        title: 'Updated!',
+        text: 'Settings updated successfully!',
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      });
       if (onRefresh) onRefresh()
       fetchCafeData()
     } catch (err) {
-      alert('Error updating settings: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Error updating settings: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -1795,8 +1918,17 @@ function CafeAdminDashboard({ user, onLogout, onUpdateUser }) {
 
     // Wallet Balance Check
     if (user.wallet_balance < 25) {
-      alert(`System Suspended: Your wallet balance (₹${user.wallet_balance}) is below the minimum required limit of ₹25. Please recharge your wallet to start new table sessions.`);
-      setShowWalletModal(true);
+      Swal.fire({
+        title: 'System Suspended',
+        text: `Your wallet balance (₹${user.wallet_balance}) is below the minimum required limit of ₹25. Please recharge your wallet to start new table sessions.`,
+        icon: 'error',
+        confirmButtonColor: '#6366f1',
+        confirmButtonText: 'Recharge Now'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setShowWalletModal(true);
+        }
+      });
       return;
     }
 
@@ -1813,8 +1945,20 @@ function CafeAdminDashboard({ user, onLogout, onUpdateUser }) {
       await api.startBooking(bookingData)
       setShowSessionModal(false)
       loadActiveBookings()
+      Swal.fire({
+        title: 'Session Started!',
+        text: `${selectedTable.displayName} is now active.`,
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      });
     } catch (err) {
-      alert('Failed to start session: ' + err.message)
+      Swal.fire({
+        title: 'Start Failed',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     }
   }
 
@@ -1858,14 +2002,40 @@ function CafeAdminDashboard({ user, onLogout, onUpdateUser }) {
   }
 
   const confirmCheckout = async (bookingId, finalData) => {
+    // Optimistic UI Update: Instantly close modal and free up the table in the UI
+    setShowCheckoutModal(false)
+    setActiveBookings(prev => prev.filter(b => b.id !== bookingId))
+
     try {
+      // Perform the actual API call
       await api.endBooking(bookingId, finalData)
-      loadActiveBookings()
       
+      // Refresh data in background to ensure everything is in sync
+      loadActiveBookings()
       loadCafeDetails()
       
-      setShowCheckoutModal(false)
-    } catch (err) { alert('Error: ' + err.message) }
+      // Show a quick non-blocking toast
+      Swal.fire({
+        title: 'Paid & Table Freed!',
+        icon: 'success',
+        toast: true,
+        position: 'top-end',
+        timer: 2500,
+        showConfirmButton: false,
+        background: '#fff',
+        color: '#10b981',
+        iconColor: '#10b981'
+      });
+    } catch (err) {
+      Swal.fire({
+        title: 'Checkout Error',
+        text: 'Failed to record checkout: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
+      // Restore correct state from server
+      loadActiveBookings()
+    }
   }
 
   const formatDuration = (startTime) => {
@@ -2013,8 +2183,15 @@ function CafeAdminDashboard({ user, onLogout, onUpdateUser }) {
                       ) : (
                         <div className="card-action-area" onClick={() => {
                           if ((user.wallet_balance || 0) < 25) {
-                            alert(`Insufficient Wallet Balance! Your balance is ₹${user.wallet_balance || 0}, which is below the ₹25 limit. Please recharge to start a new session.`)
-                            setShowWalletModal(true)
+                            Swal.fire({
+                              title: 'Insufficient Balance',
+                              text: `Your balance is ₹${user.wallet_balance || 0}, which is below the ₹25 limit. Please recharge to start a new session.`,
+                              icon: 'error',
+                              confirmButtonColor: '#6366f1',
+                              confirmButtonText: 'Recharge Now'
+                            }).then(res => {
+                              if (res.isConfirmed) setShowWalletModal(true)
+                            })
                             return
                           }
                           setSelectedTable({ typeId: tableType.id, index: i, displayName: `${tableType.name} ${i + 1}`, price: tableType.price });
@@ -2030,8 +2207,15 @@ function CafeAdminDashboard({ user, onLogout, onUpdateUser }) {
               ))}
               <div className="take-away-card-v2" onClick={() => {
                 if ((user.wallet_balance || 0) < 25) {
-                  alert(`Insufficient Wallet Balance! Your balance is ₹${user.wallet_balance || 0}, which is below the ₹25 limit. Please recharge to start a takeaway order.`)
-                  setShowWalletModal(true)
+                  Swal.fire({
+                    title: 'Insufficient Balance',
+                    text: `Your balance is ₹${user.wallet_balance || 0}, which is below the ₹25 limit. Please recharge to start a takeaway order.`,
+                    icon: 'error',
+                    confirmButtonColor: '#6366f1',
+                    confirmButtonText: 'Recharge Now'
+                  }).then(res => {
+                    if (res.isConfirmed) setShowWalletModal(true)
+                  })
                   return
                 }
                 setShowTakeAwayModal(true)
@@ -2413,7 +2597,12 @@ function SettlementSettingsModal({ cafeId, currentDay, onClose, onSave }) {
       onSave()
       onClose()
     } catch (err) {
-      alert('Failed to update: ' + err.message)
+      Swal.fire({
+        title: 'Update Failed',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -2517,14 +2706,34 @@ function CafeAnalyticsView({ cafeId, activeTab }) {
   }
 
   const handleSettleMonth = async () => {
-    if (!window.confirm('Are you sure you want to settle this month? This will save all current stats to history and reset the current month values to zero.')) return
+    const result = await Swal.fire({
+      title: 'Settle Month?',
+      text: 'Are you sure you want to settle this month? This will save all current stats to history and reset the current month values to zero.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#6366f1',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, settle now'
+    });
+
+    if (!result.isConfirmed) return
     try {
       setLoading(true)
       await api.settleMonth(cafeId)
       await loadData()
-      alert('Month settled successfully! Data has been moved to history.')
+      Swal.fire({
+        title: 'Settled!',
+        text: 'Month settled successfully! Data has been moved to history.',
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      });
     } catch (err) {
-      alert('Failed to settle: ' + err.message)
+      Swal.fire({
+        title: 'Failed!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
       setLoading(false)
     }
   }
@@ -2747,24 +2956,58 @@ function CafeExpensesView({ cafeId, activeTab }) {
     e.preventDefault()
     setSubmitting(true)
     try {
-      const res = await api.addExpense({ ...form, cafe_id: cafeId, amount: parseFloat(form.amount) })
+      await api.addExpense({ ...form, cafe_id: cafeId, amount: parseFloat(form.amount) })
       setForm({ name: '', amount: '', date: new Date().toISOString().split('T')[0], category: 'General' })
       // Silent refresh
       await loadExpenses(false)
+      Swal.fire({
+        title: 'Added!',
+        text: 'Expense added successfully.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
     } catch (err) {
-      alert('Error adding expense: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this expense?')) return
+    const result = await Swal.fire({
+      title: 'Delete Expense?',
+      text: 'Are you sure you want to delete this expense?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (!result.isConfirmed) return
     try {
       await api.deleteExpense(id)
       loadExpenses(false)
+      Swal.fire({
+        title: 'Deleted!',
+        text: 'Expense has been removed.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
     } catch (err) {
-      alert('Error deleting expense: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     }
   }
 
@@ -2922,21 +3165,52 @@ function CafeSettingsView({ cafeId, onRefresh, onRefreshMenu, user, onUpdateUser
   const handleSaveAll = async () => {
     try {
       await Promise.all(tables.map(t => api.updateTable(t.id, t)))
-      alert('Configurations saved successfully!')
+      Swal.fire({
+        title: 'Saved!',
+        text: 'Configurations saved successfully!',
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      });
       onRefresh() // Instant update for Dashboard
     } catch (err) {
-      alert('Failed to save: ' + err.message)
+      Swal.fire({
+        title: 'Save Failed',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     }
   }
 
   const handleDeleteTable = async (id) => {
-    if (window.confirm('Delete this table type?')) {
+    const result = await Swal.fire({
+      title: 'Delete Table Type?',
+      text: 'Are you sure you want to delete this table type?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
       try {
         await api.deleteTable(id)
         fetchTables()
         onRefresh() // Instant update for Dashboard
+        Swal.fire({
+          title: 'Deleted!',
+          text: 'Table type removed.',
+          icon: 'success',
+          confirmButtonColor: '#6366f1'
+        });
       } catch (err) {
-        alert('Failed to delete: ' + err.message)
+        Swal.fire({
+          title: 'Error!',
+          text: err.message,
+          icon: 'error',
+          confirmButtonColor: '#6366f1'
+        });
       }
     }
   }
@@ -2968,9 +3242,20 @@ function CafeSettingsView({ cafeId, onRefresh, onRefreshMenu, user, onUpdateUser
                   setIsSavingTime(true)
                   await api.updateCafeSettings(cafeId, { closing_time: closingTime })
                   onUpdateUser({ ...user, closing_time: closingTime })
-                  alert('Closing time updated successfully!')
+                  Swal.fire({
+                    title: 'Updated!',
+                    text: 'Closing time updated successfully!',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false
+                  });
                 } catch (err) {
-                  alert('Failed to update closing time: ' + err.message)
+                  Swal.fire({
+                    title: 'Error!',
+                    text: 'Failed to update closing time: ' + err.message,
+                    icon: 'error',
+                    confirmButtonColor: '#6366f1'
+                  });
                 } finally {
                   setIsSavingTime(false)
                 }
@@ -3062,7 +3347,14 @@ function CafeSettingsView({ cafeId, onRefresh, onRefreshMenu, user, onUpdateUser
                   try {
                     await api.updateCafeSettings(cafeId, { is_commission_active: false })
                     onUpdateUser({ ...user, is_commission_active: false })
-                  } catch (err) { alert(err.message) }
+                  } catch (err) {
+                    Swal.fire({
+                      title: 'Error!',
+                      text: err.message,
+                      icon: 'error',
+                      confirmButtonColor: '#6366f1'
+                    });
+                  }
                 }}
               >
                 Disable
@@ -3073,7 +3365,14 @@ function CafeSettingsView({ cafeId, onRefresh, onRefreshMenu, user, onUpdateUser
                   try {
                     await api.updateCafeSettings(cafeId, { is_commission_active: true })
                     onUpdateUser({ ...user, is_commission_active: true })
-                  } catch (err) { alert(err.message) }
+                  } catch (err) {
+                    Swal.fire({
+                      title: 'Error!',
+                      text: err.message,
+                      icon: 'error',
+                      confirmButtonColor: '#6366f1'
+                    });
+                  }
                 }}
               >
                 Enable
@@ -3110,14 +3409,26 @@ function CafeSettingsView({ cafeId, onRefresh, onRefreshMenu, user, onUpdateUser
                       if (isEditingCommission) {
                         const newAmount = parseFloat(tempCommission) || 0
                         if (newAmount > user.commission_rs) {
-                          alert(`You cannot set a platform fee greater than the assigned commission (₹${user.commission_rs})`)
+                          Swal.fire({
+                            title: 'Limit Exceeded',
+                            text: `You cannot set a platform fee greater than the assigned commission (₹${user.commission_rs})`,
+                            icon: 'error',
+                            confirmButtonColor: '#6366f1'
+                          });
                           return
                         }
                         try {
                           await api.updateCafeSettings(cafeId, { admin_commission_amount: newAmount })
                           onUpdateUser({ ...user, admin_commission_amount: newAmount })
                           setIsEditingCommission(false)
-                        } catch (err) { alert(err.message) }
+                        } catch (err) {
+                          Swal.fire({
+                            title: 'Error!',
+                            text: err.message,
+                            icon: 'error',
+                            confirmButtonColor: '#6366f1'
+                          });
+                        }
                       } else {
                         setTempCommission(user.admin_commission_amount || 0)
                         setIsEditingCommission(true)
@@ -3149,7 +3460,14 @@ function CafeSettingsView({ cafeId, onRefresh, onRefreshMenu, user, onUpdateUser
                   try {
                     await api.updateCafeSettings(cafeId, { discount_type: 'fixed' })
                     onUpdateUser({ ...user, discount_type: 'fixed' })
-                  } catch (err) { alert(err.message) }
+                  } catch (err) {
+                    Swal.fire({
+                      title: 'Error!',
+                      text: err.message,
+                      icon: 'error',
+                      confirmButtonColor: '#6366f1'
+                    });
+                  }
                 }}
               >
                 Fixed (₹)
@@ -3160,7 +3478,14 @@ function CafeSettingsView({ cafeId, onRefresh, onRefreshMenu, user, onUpdateUser
                   try {
                     await api.updateCafeSettings(cafeId, { discount_type: 'percentage' })
                     onUpdateUser({ ...user, discount_type: 'percentage' })
-                  } catch (err) { alert(err.message) }
+                  } catch (err) {
+                    Swal.fire({
+                      title: 'Error!',
+                      text: err.message,
+                      icon: 'error',
+                      confirmButtonColor: '#6366f1'
+                    });
+                  }
                 }}
               >
                 Percentage (%)
@@ -3291,10 +3616,20 @@ function WalletRechargeModal({ user, onClose, onSuccess }) {
             onSuccess(res.new_balance)
             // Notify other tabs
             walletSyncChannel.postMessage({ type: 'WALLET_UPDATED', cafeId: user.id });
-            alert('Recharge successful!')
+            Swal.fire({
+              title: 'Recharge Successful!',
+              text: 'Your wallet has been topped up.',
+              icon: 'success',
+              confirmButtonColor: '#6366f1'
+            });
             onClose()
           } catch (err) {
-            alert('Verification failed: ' + err.message)
+            Swal.fire({
+              title: 'Verification Failed',
+              text: err.message,
+              icon: 'error',
+              confirmButtonColor: '#6366f1'
+            });
           }
         },
         prefill: {
@@ -3310,11 +3645,21 @@ function WalletRechargeModal({ user, onClose, onSuccess }) {
       }
       const rzp = new window.Razorpay(options)
       rzp.on('payment.failed', function (response){
-        alert("Payment Failed: " + response.error.description);
+        Swal.fire({
+          title: 'Payment Failed',
+          text: response.error.description,
+          icon: 'error',
+          confirmButtonColor: '#6366f1'
+        });
       });
       rzp.open()
     } catch (err) {
-      alert('Failed to initiate payment: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to initiate payment: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
       setLoading(false)
     }
   }
@@ -3383,7 +3728,12 @@ function TableModal({ onClose, onSuccess, cafeId, initialData }) {
         }
         onSuccess()
       } catch (err) {
-      alert('Operation failed: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Operation failed: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -3486,7 +3836,12 @@ function CheckoutModal({ data, user, onClose, onConfirm }) {
       })
     } catch (err) {
       console.error('Payment processing failed:', err);
-      alert('Failed to process payment: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to process payment: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -3494,7 +3849,7 @@ function CheckoutModal({ data, user, onClose, onConfirm }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container checkout-modal" onClick={e => e.stopPropagation()} style={{maxWidth: '850px', padding: 0, overflow: 'hidden'}}>
+      <div className="modal-container checkout-modal" onClick={e => e.stopPropagation()} style={{maxWidth: '820px', padding: 0, overflow: 'hidden'}}>
         <div className="modal-header" style={{padding: '1.5rem 2rem', borderBottom: '1px solid #f1f5f9'}}>
           <h2 style={{fontSize: '1.25rem'}}>Checkout - {data.tableName}</h2>
           <button type="button" className="close-modal" onClick={onClose}>✕</button>
@@ -3658,7 +4013,6 @@ function CheckoutModal({ data, user, onClose, onConfirm }) {
                          placeholder="000" 
                          value={cashReceived}
                          onChange={e => setCashReceived(e.target.value)}
-                         autoFocus
                        />
                     </div>
                  </div>
@@ -3715,7 +4069,12 @@ function AddMenuModal({ cafeId, categories, onClose, onSuccess, onRefreshCategor
       setItemPrice('')
       onSuccess()
     } catch (err) {
-      alert('Error adding item: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Error adding item: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -3814,7 +4173,12 @@ function AddCategoryModal({ cafeId, onClose, onSuccess }) {
         throw new Error('Failed to create category')
       }
     } catch (err) {
-      alert('Error: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -3857,12 +4221,34 @@ function ViewMenuModal({ categories, items, onClose, onRefresh }) {
   const [editingPrice, setEditingPrice] = useState('')
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this item?')) {
+    const result = await Swal.fire({
+      title: 'Delete Item?',
+      text: 'Are you sure you want to delete this item?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
       try {
         await api.deleteMenuItem(id)
         onRefresh()
+        Swal.fire({
+          title: 'Deleted!',
+          text: 'Item has been removed.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false
+        });
       } catch (err) {
-        alert(err.message)
+        Swal.fire({
+          title: 'Error!',
+          text: err.message,
+          icon: 'error',
+          confirmButtonColor: '#6366f1'
+        });
       }
     }
   }
@@ -3875,7 +4261,12 @@ function ViewMenuModal({ categories, items, onClose, onRefresh }) {
   const handleSavePrice = async (item) => {
     const newPrice = parseFloat(editingPrice)
     if (isNaN(newPrice) || newPrice < 0) {
-      alert("Invalid price entered.")
+      Swal.fire({
+        title: 'Invalid Price',
+        text: 'Please enter a valid price.',
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
       return
     }
     try {
@@ -3883,7 +4274,12 @@ function ViewMenuModal({ categories, items, onClose, onRefresh }) {
       setEditingId(null)
       onRefresh()
     } catch (err) {
-      alert("Failed to update price: " + err.message)
+      Swal.fire({
+        title: 'Update Failed',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     }
   }
 
@@ -3975,7 +4371,12 @@ function OrderItemModal({ booking, menu, items, onClose, onSuccess }) {
       })
       onSuccess() // Refresh counters
     } catch (err) {
-      alert('Failed to add item: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to add item: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -3991,7 +4392,12 @@ function OrderItemModal({ booking, menu, items, onClose, onSuccess }) {
       await api.deleteBookingItem(itemToRemove.id)
       onSuccess()
     } catch (err) {
-      alert('Failed to remove item: ' + err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: 'Failed to remove item: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -4005,8 +4411,8 @@ function OrderItemModal({ booking, menu, items, onClose, onSuccess }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container view-menu-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header" style={{flexDirection: 'column', alignItems: 'flex-start', gap: '1.25rem', padding: '1.5rem 2rem 1rem'}}>
+      <div className="modal-container view-menu-modal" onClick={e => e.stopPropagation()} style={{maxWidth: '850px'}}>
+        <div className="modal-header" style={{flexDirection: 'column', alignItems: 'flex-start', gap: '1rem', padding: '1.25rem 1.5rem 0.75rem'}}>
           <div style={{display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center'}}>
             <h2 style={{fontSize: '1.4rem'}}>Add Order: {booking?.table_name}</h2>
             <button type="button" className="close-modal" onClick={onClose}>✕</button>
@@ -4102,7 +4508,12 @@ function OrderReviewModal({ booking, items, onClose, onRefresh }) {
       })
       onRefresh()
     } catch (err) {
-      alert(err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -4116,7 +4527,12 @@ function OrderReviewModal({ booking, items, onClose, onRefresh }) {
       await api.deleteBookingItem(idToDelete)
       onRefresh()
     } catch (err) {
-      alert(err.message)
+      Swal.fire({
+        title: 'Error!',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false)
     }
@@ -4124,7 +4540,7 @@ function OrderReviewModal({ booking, items, onClose, onRefresh }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container view-menu-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-container view-menu-modal" onClick={e => e.stopPropagation()} style={{maxWidth: '850px'}}>
         <div className="modal-header">
           <h2>Order History - {booking?.table_name}</h2>
           <button type="button" className="close-modal" onClick={onClose}>✕</button>
@@ -4200,7 +4616,9 @@ function TakeAwayModal({ cafeId, menu, user, onClose }) {
   const changeToReturn = Math.max(0, (parseFloat(cashReceived) || 0) - finalTotal)
 
   const handleFinish = async () => {
-    setLoading(true)
+    // Optimistic: close modal immediately to make it feel instant
+    onClose()
+    
     try {
       await api.createSale({
         cafe_id: cafeId,
@@ -4212,12 +4630,26 @@ function TakeAwayModal({ cafeId, menu, user, onClose }) {
         discount: discountVal,
         extra_amount: extraVal
       })
-      alert('Order completed successfully!')
-      onClose()
+      
+      // Non-blocking toast
+      Swal.fire({
+        title: 'Order Successful!',
+        icon: 'success',
+        toast: true,
+        position: 'top-end',
+        timer: 2500,
+        showConfirmButton: false,
+        background: '#fff',
+        color: '#10b981',
+        iconColor: '#10b981'
+      });
     } catch (err) {
-      alert('Failed to record sale: ' + err.message)
-    } finally {
-      setLoading(false)
+      Swal.fire({
+        title: 'Takeaway Error',
+        text: 'Failed to record sale: ' + err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     }
   }
 
@@ -4227,7 +4659,7 @@ function TakeAwayModal({ cafeId, menu, user, onClose }) {
   if (showCheckout) {
     return (
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-container checkout-modal" onClick={e => e.stopPropagation()} style={{maxWidth: '850px', padding: 0, overflow: 'hidden'}}>
+        <div className="modal-container checkout-modal" onClick={e => e.stopPropagation()} style={{maxWidth: '820px', padding: 0, overflow: 'hidden'}}>
           <div className="modal-header" style={{padding: '1.5rem 2rem', borderBottom: '1px solid #f1f5f9'}}>
             <h2 style={{fontSize: '1.25rem'}}>Take Away - Billing</h2>
             <button type="button" className="close-modal" onClick={() => setShowCheckout(false)}>Back</button>
@@ -4355,7 +4787,6 @@ function TakeAwayModal({ cafeId, menu, user, onClose }) {
                            placeholder="000" 
                            value={cashReceived}
                            onChange={e => setCashReceived(e.target.value)}
-                           autoFocus
                          />
                       </div>
                    </div>
@@ -4389,12 +4820,12 @@ function TakeAwayModal({ cafeId, menu, user, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container view-menu-modal" style={{maxWidth: '1000px'}} onClick={e => e.stopPropagation()}>
+      <div className="modal-container view-menu-modal" style={{maxWidth: '920px'}} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>New Take Away Order</h2>
           <button type="button" className="close-modal" onClick={onClose}>✕</button>
         </div>
-        <div className="take-away-split-body" style={{display: 'flex', height: '75vh', maxHeight: '600px'}}>
+        <div className="take-away-split-body" style={{display: 'flex', height: '70vh', maxHeight: '550px'}}>
           {/* Menu Side */}
           <div className="menu-selection-side" style={{flex: 1.5, overflowY: 'auto', padding: '1rem', borderRight: '1px solid #f1f5f9'}}>
             {categories.map(catName => (
@@ -4639,7 +5070,12 @@ function PublicRechargeModal({ onClose }) {
 
   const handleRecharge = async () => {
     if (!amount || isNaN(amount) || amount <= 0) {
-      alert("Please enter a valid amount")
+      Swal.fire({
+        title: 'Invalid Amount',
+        text: "Please enter a valid amount",
+        icon: 'warning',
+        confirmButtonColor: '#6366f1'
+      });
       return
     }
     
@@ -4677,7 +5113,12 @@ function PublicRechargeModal({ onClose }) {
             walletSyncChannel.postMessage({ type: 'WALLET_UPDATED', cafeId: foundCafe.id });
             setStep('success')
           } catch (err) {
-            alert("Payment verification failed: " + err.message)
+            Swal.fire({
+              title: 'Verification Failed',
+              text: err.message,
+              icon: 'error',
+              confirmButtonColor: '#6366f1'
+            });
           }
         },
         prefill: {
@@ -4692,11 +5133,21 @@ function PublicRechargeModal({ onClose }) {
       
       const rzp = new window.Razorpay(options)
       rzp.on('payment.failed', function (response){
-        alert("Payment Failed: " + response.error.description);
+        Swal.fire({
+          title: 'Payment Failed',
+          text: response.error.description,
+          icon: 'error',
+          confirmButtonColor: '#6366f1'
+        });
       });
       rzp.open()
     } catch (err) {
-      alert("Recharge failed: " + err.message)
+      Swal.fire({
+        title: 'Recharge Failed',
+        text: err.message,
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       // Don't set loading false here if payment modal is open, let ondismiss or success handle it
       // but if there was an error before open(), we need it false.
